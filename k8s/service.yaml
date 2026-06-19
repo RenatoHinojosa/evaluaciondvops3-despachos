@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: despacho-service
+spec:
+  selector:
+    app: despacho
+  ports:
+    - port: 8081
+      targetPort: 8081
+  type: ClusterIP   # solo accesible dentro del cluster (frontend le habla por este nombre)

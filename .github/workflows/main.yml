@@ -1,0 +1,75 @@
+name: Build, Push and Deploy via SSM
+
+on:
+  push:
+    branches: [ "deploy" ]
+
+# Definimos aala URL del Registry como una variable de entorno global
+env:
+  REGISTRY_URL: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+jobs:
+  build-and-push:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        env:
+          ECR_REPOSITORY: ${{ secrets.AWS_ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t ${{ env.REGISTRY_URL }}/$ECR_REPOSITORY:$IMAGE_TAG -t ${{ env.REGISTRY_URL }}/$ECR_REPOSITORY:latest .
+          docker push ${{ env.REGISTRY_URL }}/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push ${{ env.REGISTRY_URL }}/$ECR_REPOSITORY:latest
+
+  deploy-to-ec2:
+    name: Deploy to EC2 via SSM
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials for SSM
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Desplegar Backend y BD vÃ­a SSM
+        run: |
+          aws ssm send-command \
+            --instance-ids ${{ secrets.EC2_INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --comment "Despliegue de API y MySQL con secreto de Registry" \
+            --parameters '{"commands":[
+              "set -e",
+              "mkdir -p /home/ec2-user/backend-despacho",
+              "cd /home/ec2-user/backend-despacho",
+              "aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.REGISTRY_URL }}",
+              "docker pull ${{ env.REGISTRY_URL }}/${{ secrets.AWS_ECR_REPOSITORY }}:latest",
+              "docker network create api-network || true",
+              "docker stop springboot-api mysql-db || true",
+              "docker rm springboot-api mysql-db || true",
+              "docker run -d --name mysql-db --network api-network -v mysql_data:/var/lib/mysql -p 3306:3306 -e MYSQL_DATABASE=${{ secrets.DB_NAME }} -e MYSQL_ROOT_PASSWORD=${{ secrets.DB_PASSWORD }} -e MYSQL_USER=${{ secrets.DB_USER }} -e MYSQL_PASSWORD=${{ secrets.DB_PASSWORD }} mysql:8.0",
+              "sleep 15",
+              "docker run -d --name springboot-api --network api-network -p 8080:8080 -e DB_ENDPOINT=mysql-db -e DB_PORT=3306 -e DB_NAME=${{ secrets.DB_NAME }} -e DB_USERNAME=${{ secrets.DB_USER }} -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} ${{ env.REGISTRY_URL }}/${{ secrets.AWS_ECR_REPOSITORY }}:latest",
+              "docker image prune -a -f"
+            ]}' \
+            --output text
