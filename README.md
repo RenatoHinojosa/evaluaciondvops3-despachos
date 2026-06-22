@@ -6,12 +6,12 @@ Microservicio Java/Spring Boot para la gestión de despachos.
 
 Estructura principal del código:
 
-- **Entrada HTTP:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/controller/DespachoController.java`
-- **Lógica de negocio:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/persistence/services/DespachoService.java` y `DespachoServiceImpl.java`
-- **Acceso a datos:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/persistence/repository/DespachoRepository.java`
-- **Entidad JPA:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/persistence/entity/Despacho.java`
-- **Manejo de errores:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/exceptions/*`
-- **Configuración OpenAPI/CORS:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/config/*`
+- **Entrada HTTP:** `src/main/java/com/citt/controller/DespachoController.java`
+- **Lógica de negocio:** `src/main/java/com/citt/persistence/services/DespachoService.java` y `DespachoServiceImpl.java`
+- **Acceso a datos:** `src/main/java/com/citt/persistence/repository/DespachoRepository.java`
+- **Entidad JPA:** `src/main/java/com/citt/persistence/entity/Despacho.java`
+- **Manejo de errores:** `src/main/java/com/citt/exceptions/*`
+- **Configuración OpenAPI/CORS:** `src/main/java/com/citt/config/*`
 
 Stack definido en `pom.xml`:
 
@@ -26,7 +26,7 @@ Stack definido en `pom.xml`:
 ## 2) Configuración de MySQL por variables de entorno
 
 Configuración en:
-`/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/resources/application.properties`
+`src/main/resources/application.properties`
 
 Variables requeridas:
 
@@ -48,7 +48,7 @@ Además:
 ## 3) Flujo CI/CD real en deploy
 
 Workflow principal:
-`/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/.github/workflows/main.yml`
+`.github/workflows/main.yml`
 
 Se dispara en push a la rama `deploy` y tiene 2 jobs:
 
@@ -74,7 +74,7 @@ Se dispara en push a la rama `deploy` y tiene 2 jobs:
 
 ## 4) Kubernetes/EKS: recursos existentes y faltantes
 
-Recursos existentes en `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/k8s`:
+Recursos existentes en `k8s/`:
 
 - `deployment.yaml` (backend)
 - `service.yaml` (backend, ClusterIP)
