@@ -129,7 +129,7 @@ cd evaluaciondvops3-despachos
 ```bash
 export DB_ENDPOINT=localhost
 export DB_PORT=3306
-export DB_NAME=despachos_db
+export DB_NAME=despachos_db   # ejemplo: reemplazar por el nombre real
 export DB_USERNAME=root
 export DB_PASSWORD=tu_clave
 ```
@@ -154,6 +154,8 @@ docker run --rm -p 8081:8081 \
   despachos-app:local
 ```
 
+> En Linux, `host.docker.internal` puede no resolver; usa la IP del host, una red Docker compartida con MySQL, o ajusta la estrategia de red según tu entorno.
+
 ## Despliegue en EKS (estado actual y qué falta)
 
 Hoy el repo **no tiene pipeline completo EKS**. Para dejarlo operativo en EKS se debe completar al menos:
@@ -167,4 +169,4 @@ Hoy el repo **no tiene pipeline completo EKS**. Para dejarlo operativo en EKS se
 
 ## Notas de validación
 
-- `./mvnw test` actualmente falla en entorno limpio si no se definen `DB_ENDPOINT` y `DB_PORT` (el test de contexto intenta inicializar datasource MySQL).
+- `./mvnw test` actualmente falla en entorno limpio si no se definen variables `DB_*` y no existe un MySQL alcanzable (el test de contexto inicializa datasource real).
