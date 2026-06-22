@@ -1,72 +1,170 @@
-# Backend Despachos - Sistema de Gestión de Despachos y Ventas
+# Backend Despachos (rama deploy)
 
-##  Descripción del Proyecto
+Microservicio Java/Spring Boot para la gestión de despachos.
 
-Este proyecto es el **Módulo de Despachos** del Sistema de Gestión de Despachos y Ventas. Es un microservicio encargado de la administración de envíos, seguimiento y logística. 
-Este backend funciona de manera desacoplada y se comunica con un Frontend en React y otro microservicio de Ventas, a través de un reverse proxy (Nginx).
+## 1) Arquitectura backend
 
-El sistema está diseñado con propósitos **académicos y educativos** para demostrar buenas prácticas en el desarrollo de aplicaciones modernas con arquitectura de microservicios, bases de datos en la nube (AWS RDS) y despliegues mediante pipelines CI/CD.
+Estructura principal del código:
 
----
+- **Entrada HTTP:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/controller/DespachoController.java`
+- **Lógica de negocio:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/persistence/services/DespachoService.java` y `DespachoServiceImpl.java`
+- **Acceso a datos:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/persistence/repository/DespachoRepository.java`
+- **Entidad JPA:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/persistence/entity/Despacho.java`
+- **Manejo de errores:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/exceptions/*`
+- **Configuración OpenAPI/CORS:** `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/java/com/citt/config/*`
 
-##  Tecnologías Utilizadas
+Stack definido en `pom.xml`:
 
-- **Spring Boot 3** - Framework principal para la creación del microservicio en Java.
-- **Spring Data JPA & Hibernate** - ORM para la interacción con la base de datos.
-- **MySQL** - Base de datos relacional (alojada en AWS RDS).
-- **Swagger / OpenAPI 3** - Para la documentación interactiva de la API.
-- **Docker** - Containerización de la aplicación.
-- **GitHub Actions** - Pipeline CI/CD para automatizar builds y despliegues en AWS ECR y EC2.
-- **Maven** - Herramienta de gestión de dependencias y build.
+- Java 17
+- Spring Boot 3.4.4
+- Spring Web
+- Spring Data JPA + Hibernate
+- MySQL Connector/J
+- springdoc-openapi (Swagger UI)
+- Lombok
 
----
+## 2) Configuración de MySQL por variables de entorno
 
-##  Configuración y Puerto
+Configuración en:
+`/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/src/main/resources/application.properties`
 
-El servicio está configurado para ejecutarse localmente y en el contenedor en el puerto **8081**.
-La conexión a la base de datos se realiza a través de variables de entorno para garantizar la seguridad de las credenciales (AWS RDS).
+Variables requeridas:
 
-### Variables de Entorno Requeridas:
-- `DB_ENDPOINT`: Endpoint de la base de datos MySQL en AWS RDS.
-- `DB_PORT`: Puerto de la base de datos (por defecto 3306).
-- `DB_NAME`: Nombre de la base de datos.
-- `DB_USERNAME`: Usuario de la base de datos.
-- `DB_PASSWORD`: Contraseña de la base de datos.
+- `DB_ENDPOINT`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USERNAME`
+- `DB_PASSWORD`
 
----
+La URL JDBC se construye así:
 
-##  Endpoints Principales
+`jdbc:mysql://${DB_ENDPOINT}:${DB_PORT}/${DB_NAME}?useSSL=false&serverTimezone=UTC&createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true`
 
-La API RESTful está expuesta bajo el prefijo `/api/v1/despachos`.
+Además:
 
-| Método | Endpoint | Descripción |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/despachos` | Obtener todos los despachos registrados. |
-| `GET` | `/api/v1/despachos/{idDespacho}` | Obtener un despacho específico por su ID. |
-| `POST` | `/api/v1/despachos` | Crear un nuevo registro de despacho. |
-| `PUT` | `/api/v1/despachos/{idDespacho}` | Actualizar la información de un despacho existente. |
-| `DELETE` | `/api/v1/despachos/{idDespacho}` | Eliminar un despacho por su ID. |
+- Puerto de la app: `server.port=8081`
+- Swagger UI: `/swagger-ui.html`
 
-### Documentación de la API (Swagger)
-Puedes probar e interactuar con la API directamente a través de Swagger UI cuando el servidor esté corriendo:
-- **URL local:** `http://localhost:8081/swagger-ui.html`
+## 3) Flujo CI/CD real en deploy
 
----
+Workflow principal:
+`/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/.github/workflows/main.yml`
 
-##  Despliegue CI/CD
+Se dispara en push a la rama `deploy` y tiene 2 jobs:
 
-Al igual que el Frontend, este servicio cuenta con un flujo CI/CD configurado con **GitHub Actions**.
+1. **build-and-push**
+   - Checkout
+   - Configura credenciales AWS
+   - Login en ECR
+   - `docker build` de la imagen
+   - Push de tags `${github.sha}` y `latest` a ECR
 
-### **Flujo del Pipeline:**
-1. **Build & Push:** Construye el proyecto con Maven, empaqueta el `.jar` en una imagen Docker y la sube a **AWS ECR**.
-2. **Deploy to EC2:** Se conecta a la instancia EC2 usando **AWS Systems Manager (SSM)**, descarga la nueva imagen desde ECR, detiene el contenedor antiguo y levanta el nuevo contenedor de despachos mapeando el puerto 8081.
+2. **deploy-to-ec2**
+   - Configura credenciales AWS
+   - Ejecuta `aws ssm send-command` sobre una instancia EC2
+   - En EC2:
+     - Login a ECR
+     - Pull de imagen `latest`
+     - Crea red Docker
+     - Detiene/elimina contenedores previos
+     - Levanta MySQL (`mysql:8.0`) con variables `MYSQL_*`
+     - Levanta backend con variables `DB_*`
 
----
+> **Importante:** En esta rama, el deploy automatizado está implementado para **EC2 + Docker vía SSM**, no para EKS.
 
-##  Arquitectura del Sistema
+## 4) Kubernetes/EKS: recursos existentes y faltantes
 
-Este microservicio forma parte de una arquitectura mayor enrutada por **Nginx**:
-- **Frontend (React)**: Interfaz de usuario servida en el puerto 80.
-- **Backend Ventas**: API en el puerto 8080 (`/api/v1/ventas/*`).
-- **Backend Despachos (Este proyecto)**: API en el puerto 8081 (`/api/v1/despachos/*`).
-- Todas las peticiones del cliente son manejadas por el Proxy Inverso (Nginx).
+Recursos existentes en `/home/runner/work/evaluaciondvops3-despachos/evaluaciondvops3-despachos/k8s`:
+
+- `deployment.yaml` (backend)
+- `service.yaml` (backend, ClusterIP)
+- `mysql-deployment.yaml`
+- `mysql-service-yaml.yaml`
+
+Observaciones clave:
+
+- `deployment.yaml` de backend usa imagen placeholder (`nginx:alpine`) con comentario de reemplazo por workflow.
+- Se referencia un secreto `despacho-db-secret`, pero no existe manifiesto de `Secret` en el repo.
+- MySQL usa `emptyDir` (almacenamiento efímero).
+- No hay `Ingress`, `PVC`, `StorageClass`, `HPA`, `Namespace` ni chart Helm.
+- No existe workflow de GitHub Actions para deploy a EKS (`kubectl`/`helm`).
+- Hay desalineación de puertos: app escucha en **8081**, pero `k8s/deployment.yaml` declara `containerPort: 8080`.
+
+## 5) Endpoints y documentación
+
+Prefijo base:
+
+- `/api/v1/despachos`
+
+Endpoints:
+
+- `GET /api/v1/despachos` → listar
+- `GET /api/v1/despachos/{idDespacho}` → obtener por ID
+- `POST /api/v1/despachos` → crear
+- `PUT /api/v1/despachos/{idDespacho}` → actualizar
+- `DELETE /api/v1/despachos/{idDespacho}` → eliminar
+
+Documentación interactiva:
+
+- Swagger UI: `http://localhost:8081/swagger-ui.html`
+
+## 6) Guía para clonar, configurar y ejecutar localmente
+
+### Requisitos
+
+- Java 17
+- Maven (o wrapper `./mvnw`)
+- Docker (opcional, para ejecución containerizada)
+- MySQL accesible
+
+### Clonar
+
+```bash
+git clone https://github.com/RenatoHinojosa/evaluaciondvops3-despachos.git
+cd evaluaciondvops3-despachos
+```
+
+### Variables de entorno (ejemplo)
+
+```bash
+export DB_ENDPOINT=localhost
+export DB_PORT=3306
+export DB_NAME=despachos_db
+export DB_USERNAME=root
+export DB_PASSWORD=tu_clave
+```
+
+### Ejecutar con Maven
+
+```bash
+chmod +x mvnw
+./mvnw spring-boot:run
+```
+
+### Ejecutar con Docker
+
+```bash
+docker build -t despachos-app:local .
+docker run --rm -p 8081:8081 \
+  -e DB_ENDPOINT=host.docker.internal \
+  -e DB_PORT=3306 \
+  -e DB_NAME=despachos_db \
+  -e DB_USERNAME=root \
+  -e DB_PASSWORD=tu_clave \
+  despachos-app:local
+```
+
+## Despliegue en EKS (estado actual y qué falta)
+
+Hoy el repo **no tiene pipeline completo EKS**. Para dejarlo operativo en EKS se debe completar al menos:
+
+1. Crear/ajustar manifiesto `Secret` (`despacho-db-secret`).
+2. Corregir puertos en Deployment/Service para 8081.
+3. Reemplazar `emptyDir` por `PersistentVolumeClaim` para MySQL.
+4. Agregar exposición externa (`Ingress` o `Service type LoadBalancer`).
+5. Incorporar workflow GitHub Actions para autenticación AWS + actualización de kubeconfig + `kubectl apply`/`helm upgrade`.
+6. Definir estrategia de imagen en Deployment (tag inmutable por SHA).
+
+## Notas de validación
+
+- `./mvnw test` actualmente falla en entorno limpio si no se definen `DB_ENDPOINT` y `DB_PORT` (el test de contexto intenta inicializar datasource MySQL).
