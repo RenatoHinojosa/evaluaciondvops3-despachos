@@ -79,7 +79,7 @@ Recursos existentes en `k8s/`:
 - `deployment.yaml` (backend)
 - `service.yaml` (backend, ClusterIP)
 - `mysql-deployment.yaml`
-- `mysql-service-yaml.yaml`
+- `mysql-service-yaml.yaml` (nombre actual del archivo en el repositorio)
 
 Observaciones clave:
 
